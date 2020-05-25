@@ -1,0 +1,95 @@
+version: "2.2"
+
+volumes:
+
+    threatcentralelasticdata:
+        driver: local
+    threatcentralelastic2data:
+        driver: local
+    threatcentralkibanadata:
+        driver: local
+     
+networks:
+      threatcentralnetwork:
+        driver: bridge
+        ipam:
+         config:
+            - subnet: 172.24.0.0/16
+              gateway: 172.24.0.1
+
+services:
+    
+    # kibana:
+    #     image: docker.elastic.co/kibana/kibana:7.6.1
+    #     container_name: "kibana"
+    #     ports:
+    #         - 5601:5601
+    #     networks:
+    #         - threatcentralnetwork
+    es01:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.6.1
+        container_name: es01
+        environment:
+            - node.name=es01
+            - discovery.seed_hosts=es02
+            - cluster.initial_master_nodes=es01,es02
+            - cluster.name=docker-cluster
+            - bootstrap.memory_lock=true
+            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+        ports:
+            - 9500:9200
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1
+        volumes:
+            - ${PWD}/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+            - ./elastic-certificates.p12:/usr/share/elasticsearch/config/elastic-certificates.p12
+            - ./docker-data-volumes/elasticsearch:/usr/share/elasticsearch/data    
+        networks:
+            - threatcentralnetwork
+    es02:
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.6.1
+        container_name: es02
+        environment:
+            - node.name=es02
+            - discovery.seed_hosts=es01
+            - cluster.initial_master_nodes=es01,es02
+            - cluster.name=docker-cluster
+            - bootstrap.memory_lock=true
+            - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1
+       
+        volumes:
+            - ./elastic-certificates.p12:/usr/share/elasticsearch/config/elastic-certificates.p12 
+            - ${PWD}/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+        networks:
+            - threatcentralnetwork
+    kibana:
+        image: docker.elastic.co/kibana/kibana:7.6.1
+        container_name: kibana
+        ports:
+            - 5601:5601
+        volumes:
+            - ./kibana.yml:/usr/share/kibana/config/kibana.yml
+        networks:
+            - threatcentralnetwork
+        depends_on:
+            - es01
+    # metricbeat:
+    #     image: docker.elastic.co/beats/metricbeat:7.6.1
+    #     # command: --strict.perms=false
+    #     environment:
+    #         # - setup.kibana.host=kibana:5601
+    #         # - output.elasticsearch.hosts=["es01:9200"]
+    #     volumes:
+    #       - ${PWD}/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml
+    #         # - /var/run/docker.sock:/var/run/docker.sock:ro
+    #         # - /sys/fs/cgroup:/hostfs/sys/fs/cgroup:ro
+    #         # - /proc:/hostfs/proc:ro
+    #         # - /:/hostfs:ro
+    #     networks: 
+    #         - threatcentralnetwork
